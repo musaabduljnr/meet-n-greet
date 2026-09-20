@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from "./client";
+import { supabase, supabaseAdmin, isSupabaseConfigured } from "./client";
 import type { City } from "@/types/database";
 
 export interface GetCitiesResult {
@@ -18,7 +18,7 @@ export const DEFAULT_ACTIVE_CITIES: City[] = [
     venue_name: "Fox Theatre",
     venue_address: "660 Peachtree St NE, Atlanta, GA 30308",
     max_capacity: 50,
-    current_registrations_count: 42,
+    current_registrations_count: 0,
     is_active: true,
     notes: "VIP Green Room Entrance via Stage Door B.",
     created_at: "2026-09-01T00:00:00Z",
@@ -32,8 +32,8 @@ export const DEFAULT_ACTIVE_CITIES: City[] = [
     tour_date: "2026-11-20",
     venue_name: "Bayou Music Center",
     venue_address: "520 Texas Ave, Houston, TX 77002",
-    max_capacity: 45,
-    current_registrations_count: 38,
+    max_capacity: 50,
+    current_registrations_count: 0,
     is_active: true,
     notes: "VIP check-in table located at West VIP Lounge.",
     created_at: "2026-09-01T00:00:00Z",
@@ -47,8 +47,8 @@ export const DEFAULT_ACTIVE_CITIES: City[] = [
     tour_date: "2026-12-05",
     venue_name: "The Chicago Theatre",
     venue_address: "175 N State St, Chicago, IL 60601",
-    max_capacity: 50,
-    current_registrations_count: 29,
+    max_capacity: 40,
+    current_registrations_count: 0,
     is_active: true,
     notes: "Check-in at State Street VIP Entrance.",
     created_at: "2026-09-01T00:00:00Z",
@@ -62,8 +62,8 @@ export const DEFAULT_ACTIVE_CITIES: City[] = [
     tour_date: "2026-12-12",
     venue_name: "The Wiltern",
     venue_address: "3790 Wilshire Blvd, Los Angeles, CA 90010",
-    max_capacity: 60,
-    current_registrations_count: 47,
+    max_capacity: 40,
+    current_registrations_count: 0,
     is_active: true,
     notes: "Wilshire VIP entrance next to Box Office.",
     created_at: "2026-09-01T00:00:00Z",
@@ -71,24 +71,39 @@ export const DEFAULT_ACTIVE_CITIES: City[] = [
   },
   {
     id: "e5f6a7b8-c9d0-4e9f-2a3b-3c4d5e6f7a8b",
-    name: "Charlotte",
-    state: "NC",
+    name: "Detroit",
+    state: "MI",
     country: "USA",
     tour_date: "2026-12-19",
-    venue_name: "Ovens Auditorium",
-    venue_address: "2700 E Independence Blvd, Charlotte, NC 28205",
-    max_capacity: 40,
-    current_registrations_count: 15,
+    venue_name: "Fox Theatre Detroit",
+    venue_address: "2211 Woodward Ave, Detroit, MI 48201",
+    max_capacity: 35,
+    current_registrations_count: 0,
     is_active: true,
     notes: "Main Plaza VIP Entrance.",
+    created_at: "2026-09-01T00:00:00Z",
+    updated_at: "2026-09-01T00:00:00Z",
+  },
+  {
+    id: "f6a7b8c9-d0e1-4f0a-3b4c-4d5e6f7a8b9c",
+    name: "Miami",
+    state: "FL",
+    country: "USA",
+    tour_date: "2027-01-09",
+    venue_name: "The Fillmore Miami Beach",
+    venue_address: "1700 Washington Ave, Miami Beach, FL 33139",
+    max_capacity: 30,
+    current_registrations_count: 0,
+    is_active: true,
+    notes: "Fillmore VIP Gate entrance.",
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z",
   },
 ];
 
 /**
- * Sanitizes city records for public consumption, stripping internal admin notes
- * and capacity metrics in strict accordance with privacy requirements.
+ * Sanitizes city records for public consumption, preserving capacity and registration counts
+ * so fans can select active tour stops.
  */
 export function sanitizePublicCity(city: City): City {
   return {
@@ -102,20 +117,20 @@ export function sanitizePublicCity(city: City): City {
     is_active: city.is_active,
     created_at: city.created_at,
     updated_at: city.updated_at,
-    // Sensitive operational fields stripped for public consumers
-    notes: null,
-    max_capacity: 0,
-    current_registrations_count: 0,
+    notes: city.notes || null,
+    max_capacity: Number(city.max_capacity) || 50,
+    current_registrations_count: Number(city.current_registrations_count) || 0,
   };
 }
 
 /**
  * Fetches all active public tour cities from Supabase.
  * Falls back to default tour schedule if Supabase is offline or unconfigured.
- * Strips internal capacity counts and private notes before returning.
  */
 export async function getActiveCities(): Promise<GetCitiesResult> {
-  if (!isSupabaseConfigured || !supabase) {
+  const client = supabaseAdmin || supabase;
+
+  if (!isSupabaseConfigured || !client) {
     return {
       cities: DEFAULT_ACTIVE_CITIES.map(sanitizePublicCity),
       error: null,
@@ -124,7 +139,7 @@ export async function getActiveCities(): Promise<GetCitiesResult> {
   }
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from("cities")
       .select("*")
       .eq("is_active", true)
@@ -155,3 +170,4 @@ export async function getActiveCities(): Promise<GetCitiesResult> {
     };
   }
 }
+

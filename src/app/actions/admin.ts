@@ -104,6 +104,7 @@ export async function createCityAction(input: {
     revalidatePath("/admin/cities");
     revalidatePath("/admin");
     revalidatePath("/register");
+    revalidatePath("/");
 
     return {
       success: true,
@@ -146,6 +147,7 @@ export async function updateCityAction(
     revalidatePath("/admin/cities");
     revalidatePath("/admin");
     revalidatePath("/register");
+    revalidatePath("/");
 
     return {
       success: true,
@@ -183,6 +185,10 @@ export async function toggleCityActiveAction(
     });
 
     revalidatePath("/admin/cities");
+    revalidatePath("/admin");
+    revalidatePath("/register");
+    revalidatePath("/");
+
     revalidatePath("/admin");
     revalidatePath("/register");
 
