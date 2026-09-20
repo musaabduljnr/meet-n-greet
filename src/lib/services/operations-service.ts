@@ -650,6 +650,55 @@ export class OperationsService {
   // Dashboard & Metrics
   // ---------------------------------------------------------------------------
   public async getDashboardMetrics(): Promise<DashboardKPIs> {
+    const client = supabaseAdmin || supabase;
+    if (isSupabaseConfigured && client) {
+      try {
+        const [regRes, cardRes, cityRes] = await Promise.all([
+          client.from("registrations").select("id, status, city_id"),
+          client.from("fan_cards").select("id, current_status"),
+          client.from("cities").select("id, name, state, tour_date, max_capacity, is_active, current_registrations_count").order("tour_date", { ascending: true }),
+        ]);
+
+        if (!regRes.error && !cardRes.error && !cityRes.error && regRes.data && cardRes.data && cityRes.data) {
+          const regs = regRes.data;
+          const cards = cardRes.data;
+          const cities = cityRes.data;
+
+          const totalRegistrations = regs.length;
+          const pendingScheduling = regs.filter(
+            (r: { status: string }) => r.status === "REGISTERED" || r.status === "SCHEDULE_PENDING"
+          ).length;
+          const fanCardsInTransit = cards.filter((c: { current_status: string }) =>
+            ["PREPARED", "SHIPPED", "IN_TRANSIT", "OUT_FOR_DELIVERY"].includes(c.current_status)
+          ).length;
+          const completedVIPs = regs.filter((r: { status: string }) => r.status === "COMPLETED").length;
+
+          const cityBreakdown = cities.map((city: { id: string; name: string; state: string; tour_date: string; max_capacity: number; is_active: boolean; current_registrations_count: number }) => {
+            const count = regs.filter((r: { city_id: string }) => r.city_id === city.id).length;
+            return {
+              id: city.id,
+              name: city.name,
+              state: city.state,
+              tour_date: city.tour_date,
+              registrations_count: count || city.current_registrations_count || 0,
+              max_capacity: city.max_capacity,
+              is_active: city.is_active,
+            };
+          });
+
+          return {
+            totalRegistrations,
+            pendingScheduling,
+            fanCardsInTransit,
+            completedVIPs,
+            cityBreakdown,
+          };
+        }
+      } catch (err) {
+        console.error("[OperationsService getDashboardMetrics DB Failure]", err);
+      }
+    }
+
     const registrations = inMemoryRegistrations;
     const fanCards = inMemoryFanCards;
     const cities = inMemoryCities;
@@ -781,7 +830,6 @@ export class OperationsService {
       }
     }
 
-
     const index = inMemoryCities.findIndex((c) => c.id === id);
     if (index === -1) return null;
 
@@ -806,6 +854,130 @@ export class OperationsService {
     status?: RegistrationStatus;
     limit?: number;
   }): Promise<EnrichedRegistration[]> {
+    const client = supabaseAdmin || supabase;
+    if (isSupabaseConfigured && client) {
+      try {
+        let query = client
+          .from("registrations")
+          .select(`
+            id,
+            fan_id,
+            city_id,
+            status,
+            special_notes,
+            check_in_at,
+            created_at,
+            updated_at,
+            fans (*),
+            cities (*),
+            meet_and_greet_schedules (*),
+            fan_cards (*, fan_card_status_history(*))
+          `)
+          .order("created_at", { ascending: false });
+
+        if (filter?.cityId && filter.cityId !== "all") {
+          query = query.eq("city_id", filter.cityId);
+        }
+
+        if (filter?.status) {
+          query = query.eq("status", filter.status);
+        }
+
+        if (filter?.limit) {
+          query = query.limit(filter.limit);
+        }
+
+        const { data, error } = await query;
+        if (!error && data) {
+          let list: EnrichedRegistration[] = data.map((r: any) => {
+            const fanObj = Array.isArray(r.fans) ? r.fans[0] : r.fans;
+            const cityObj = Array.isArray(r.cities) ? r.cities[0] : r.cities;
+            const rawSched = Array.isArray(r.meet_and_greet_schedules)
+              ? r.meet_and_greet_schedules[0]
+              : r.meet_and_greet_schedules;
+            const rawCard = Array.isArray(r.fan_cards)
+              ? r.fan_cards[0]
+              : r.fan_cards;
+
+            const schedule: StoredScheduleEntity | null = rawSched
+              ? {
+                  id: rawSched.id,
+                  registration_id: rawSched.registration_id,
+                  fan_id: r.fan_id,
+                  city_id: r.city_id,
+                  date: rawSched.assigned_date,
+                  start_time: rawSched.arrival_time,
+                  end_time: null,
+                  location: rawSched.venue_name || cityObj?.venue_name || "",
+                  instructions: rawSched.arrival_instructions,
+                  status: (r.status as ScheduleStatus) || "SCHEDULED",
+                  is_notified: rawSched.is_notified,
+                  notified_at: rawSched.notified_at,
+                  created_by: rawSched.created_by,
+                  created_at: rawSched.created_at,
+                  updated_at: rawSched.updated_at,
+                  history: [],
+                  assigned_date: rawSched.assigned_date,
+                  arrival_time: rawSched.arrival_time,
+                  venue_name: rawSched.venue_name || cityObj?.venue_name || "",
+                  venue_address: rawSched.venue_address || cityObj?.venue_address || "",
+                  arrival_instructions: rawSched.arrival_instructions,
+                }
+              : null;
+
+            const fanCard: StoredFanCardEntity | null = rawCard
+              ? {
+                  id: rawCard.id,
+                  registration_id: rawCard.registration_id,
+                  fan_id: rawCard.fan_id,
+                  tracking_code: rawCard.tracking_code,
+                  current_status: rawCard.current_status,
+                  internal_fulfillment_notes: rawCard.internal_fulfillment_notes,
+                  courier_reference: rawCard.courier_reference,
+                  shipped_at: rawCard.shipped_at,
+                  delivered_at: rawCard.delivered_at,
+                  created_at: rawCard.created_at,
+                  updated_at: rawCard.updated_at,
+                  history: rawCard.fan_card_status_history || [],
+                }
+              : null;
+
+            return {
+              id: r.id,
+              fan: fanObj,
+              city: cityObj,
+              status: r.status,
+              special_notes: r.special_notes,
+              created_at: r.created_at,
+              updated_at: r.updated_at,
+              schedule,
+              fanCard,
+            };
+          });
+
+          if (filter?.search) {
+            const q = filter.search.toLowerCase().trim();
+            list = list.filter((r) => {
+              const fullName = `${r.fan?.first_name || ""} ${r.fan?.last_name || ""}`.toLowerCase();
+              const email = (r.fan?.email || "").toLowerCase();
+              const tracking = (r.fanCard?.tracking_code || "").toLowerCase();
+              const city = (r.city?.name || "").toLowerCase();
+              return (
+                fullName.includes(q) ||
+                email.includes(q) ||
+                tracking.includes(q) ||
+                city.includes(q)
+              );
+            });
+          }
+
+          return list;
+        }
+      } catch (err) {
+        console.error("[OperationsService getRegistrations DB Failure]", err);
+      }
+    }
+
     let list = inMemoryRegistrations.map((reg) => {
       const fan = inMemoryFans.find((f) => f.id === reg.fan_id)!;
       const city = inMemoryCities.find((c) => c.id === reg.city_id)!;
@@ -870,11 +1042,23 @@ export class OperationsService {
     id: string,
     newStatus: RegistrationStatus
   ): Promise<EnrichedRegistration | null> {
-    const regIndex = inMemoryRegistrations.findIndex((r) => r.id === id);
-    if (regIndex === -1) return null;
+    const client = supabaseAdmin || supabase;
+    if (isSupabaseConfigured && client) {
+      try {
+        await client
+          .from("registrations")
+          .update({ status: newStatus, updated_at: new Date().toISOString() })
+          .eq("id", id);
+      } catch (err) {
+        console.error("[OperationsService updateRegistrationStatus DB Failure]", err);
+      }
+    }
 
-    inMemoryRegistrations[regIndex].status = newStatus;
-    inMemoryRegistrations[regIndex].updated_at = new Date().toISOString();
+    const regIndex = inMemoryRegistrations.findIndex((r) => r.id === id);
+    if (regIndex !== -1) {
+      inMemoryRegistrations[regIndex].status = newStatus;
+      inMemoryRegistrations[regIndex].updated_at = new Date().toISOString();
+    }
 
     return this.getRegistrationById(id);
   }
@@ -886,6 +1070,63 @@ export class OperationsService {
     status?: ScheduleStatus;
     cityId?: string;
   }): Promise<StoredScheduleEntity[]> {
+    const client = supabaseAdmin || supabase;
+    if (isSupabaseConfigured && client) {
+      try {
+        const { data, error } = await client
+          .from("meet_and_greet_schedules")
+          .select(`
+            *,
+            registrations (*, fans (*), cities (*))
+          `)
+          .order("updated_at", { ascending: false });
+
+        if (!error && data) {
+          let list: StoredScheduleEntity[] = data.map((s: any) => {
+            const regObj = Array.isArray(s.registrations) ? s.registrations[0] : s.registrations;
+            const fanObj = regObj ? (Array.isArray(regObj.fans) ? regObj.fans[0] : regObj.fans) : null;
+            const cityObj = regObj ? (Array.isArray(regObj.cities) ? regObj.cities[0] : regObj.cities) : null;
+
+            return {
+              id: s.id,
+              registration_id: s.registration_id,
+              fan_id: regObj?.fan_id || fanObj?.id || "",
+              city_id: regObj?.city_id || cityObj?.id || "",
+              date: s.assigned_date,
+              start_time: s.arrival_time,
+              end_time: null,
+              location: s.venue_name,
+              instructions: s.arrival_instructions,
+              status: (regObj?.status as ScheduleStatus) || "SCHEDULED",
+              is_notified: s.is_notified,
+              notified_at: s.notified_at,
+              created_by: s.created_by,
+              created_at: s.created_at,
+              updated_at: s.updated_at,
+              history: [],
+              assigned_date: s.assigned_date,
+              arrival_time: s.arrival_time,
+              venue_name: s.venue_name,
+              venue_address: s.venue_address,
+              arrival_instructions: s.arrival_instructions,
+            };
+          });
+
+          if (filter?.status) {
+            list = list.filter((s) => s.status === filter.status);
+          }
+
+          if (filter?.cityId && filter.cityId !== "all") {
+            list = list.filter((s) => s.city_id === filter.cityId);
+          }
+
+          return list;
+        }
+      } catch (err) {
+        console.error("[OperationsService getSchedules DB Failure]", err);
+      }
+    }
+
     let list = [...inMemorySchedules];
 
     if (filter?.status) {
@@ -900,6 +1141,7 @@ export class OperationsService {
       (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
     );
   }
+
 
   public async getScheduleById(id: string): Promise<StoredScheduleEntity | null> {
     return inMemorySchedules.find((s) => s.id === id) || null;
@@ -1003,6 +1245,29 @@ export class OperationsService {
     // Transactionally update registration status
     await this.updateRegistrationStatus(input.registrationId, "SCHEDULED");
 
+    const client = supabaseAdmin || supabase;
+    if (isSupabaseConfigured && client) {
+      try {
+        await client
+          .from("meet_and_greet_schedules")
+          .insert({
+            id: schedId,
+            registration_id: input.registrationId,
+            assigned_date: input.date,
+            arrival_time: input.startTime,
+            venue_name: reg.city.venue_name || input.location,
+            venue_address: reg.city.venue_address || input.location,
+            arrival_instructions: input.instructions,
+            is_notified: false,
+            created_by: input.adminId && !input.adminId.startsWith("admin-") ? input.adminId : null,
+            created_at: now,
+            updated_at: now,
+          });
+      } catch (err) {
+        console.error("[OperationsService createSchedule DB Failure]", err);
+      }
+    }
+
     // Dispatch email if requested
     let emailResult: EmailSendResult | undefined;
     if (input.sendEmail !== false) {
@@ -1059,11 +1324,11 @@ export class OperationsService {
     emailResult?: EmailSendResult;
   }> {
     const schedIndex = inMemorySchedules.findIndex((s) => s.id === scheduleId);
-    if (schedIndex === -1) {
+    const current = inMemorySchedules[schedIndex] || (await this.getScheduleById(scheduleId));
+    if (!current) {
       throw new Error(`Schedule '${scheduleId}' not found.`);
     }
 
-    const current = inMemorySchedules[schedIndex];
     const now = new Date().toISOString();
 
     const previousValues = {
@@ -1120,6 +1385,24 @@ export class OperationsService {
     current.assigned_date = newDate;
     current.arrival_time = newStartTime;
     current.arrival_instructions = newInstructions;
+
+    const client = supabaseAdmin || supabase;
+    if (isSupabaseConfigured && client) {
+      try {
+        await client
+          .from("meet_and_greet_schedules")
+          .update({
+            assigned_date: newDate,
+            arrival_time: newStartTime,
+            venue_name: newLocation,
+            arrival_instructions: newInstructions,
+            updated_at: now,
+          })
+          .eq("id", scheduleId);
+      } catch (err) {
+        console.error("[OperationsService updateSchedule DB Failure]", err);
+      }
+    }
 
     // Synchronize registration status if schedule status changed
     if (newStatus === "COMPLETED") {
@@ -1187,11 +1470,11 @@ export class OperationsService {
     }
 
     const schedIndex = inMemorySchedules.findIndex((s) => s.id === scheduleId);
-    if (schedIndex === -1) {
+    const current = inMemorySchedules[schedIndex] || (await this.getScheduleById(scheduleId));
+    if (!current) {
       throw new Error(`Schedule '${scheduleId}' not found.`);
     }
 
-    const current = inMemorySchedules[schedIndex];
     const now = new Date().toISOString();
 
     const previousValues = {
@@ -1312,6 +1595,80 @@ export class OperationsService {
     status?: FanCardStatus;
     cityId?: string;
   }): Promise<StoredFanCardEntity[]> {
+    const client = supabaseAdmin || supabase;
+    if (isSupabaseConfigured && client) {
+      try {
+        let query = client
+          .from("fan_cards")
+          .select(`
+            id,
+            registration_id,
+            fan_id,
+            tracking_code,
+            current_status,
+            internal_fulfillment_notes,
+            courier_reference,
+            shipped_at,
+            delivered_at,
+            created_at,
+            updated_at,
+            fan:fans(*),
+            registration:registrations(*, city:cities(*)),
+            history:fan_card_status_history(*)
+          `)
+          .order("updated_at", { ascending: false });
+
+        if (filter?.status) {
+          query = query.eq("current_status", filter.status);
+        }
+
+        const { data, error } = await query;
+        if (!error && data) {
+          let cards: StoredFanCardEntity[] = data.map((c: any) => {
+            const histList = (c.history || []).map((h: any) => ({
+              id: h.id,
+              fan_card_id: h.fan_card_id,
+              previous_status: h.previous_status,
+              new_status: h.new_status,
+              status: h.new_status,
+              changed_by: h.changed_by,
+              changed_by_name: h.changed_by || "Admin Desk",
+              internal_note: h.status_notes,
+              created_at: h.created_at,
+            }));
+
+            return {
+              id: c.id,
+              registration_id: c.registration_id,
+              fan_id: c.fan_id,
+              tracking_code: c.tracking_code,
+              current_status: c.current_status,
+              internal_fulfillment_notes: c.internal_fulfillment_notes,
+              courier_reference: c.courier_reference,
+              shipped_at: c.shipped_at,
+              delivered_at: c.delivered_at,
+              created_at: c.created_at,
+              updated_at: c.updated_at,
+              history: histList,
+              registration: c.registration,
+            };
+          });
+
+          if (filter?.cityId && filter.cityId !== "all") {
+            const cityFilterId = filter.cityId;
+            cards = cards.filter((c: any) => {
+              const reg = c.registration;
+              return reg?.city_id === cityFilterId || reg?.city?.id === cityFilterId;
+            });
+          }
+
+          return cards;
+        }
+      } catch (err) {
+        console.error("[OperationsService getFanCards DB Failure]", err);
+      }
+    }
+
     let cards = [...inMemoryFanCards];
 
     if (filter?.status) {
@@ -1332,14 +1689,16 @@ export class OperationsService {
   }
 
   public async getFanCardById(cardId: string): Promise<StoredFanCardEntity | null> {
-    return inMemoryFanCards.find((c) => c.id === cardId) || null;
+    const list = await this.getFanCards();
+    return list.find((c) => c.id === cardId) || null;
   }
 
   public async getFanCardByTrackingCode(
     trackingCode: string
   ): Promise<StoredFanCardEntity | null> {
     const clean = trackingCode.trim().toUpperCase();
-    return inMemoryFanCards.find((c) => c.tracking_code === clean) || null;
+    const list = await this.getFanCards();
+    return list.find((c) => c.tracking_code === clean) || null;
   }
 
   public async updateFanCardStatus(
@@ -1358,12 +1717,11 @@ export class OperationsService {
     card: StoredFanCardEntity;
     emailResult?: EmailSendResult;
   }> {
-    const cardIndex = inMemoryFanCards.findIndex((c) => c.id === cardId);
-    if (cardIndex === -1) {
+    const card = (await this.getFanCardById(cardId)) || inMemoryFanCards.find((c) => c.id === cardId);
+    if (!card) {
       throw new Error(`Fan Card '${cardId}' not found.`);
     }
 
-    const card = inMemoryFanCards[cardIndex];
     const previousStatus = card.current_status;
     const note = options?.internalNotes || options?.issueReason;
 
@@ -1407,6 +1765,39 @@ export class OperationsService {
     };
 
     card.history.unshift(historyEntry);
+
+    const client = supabaseAdmin || supabase;
+    if (isSupabaseConfigured && client) {
+      try {
+        const updatePayload: Record<string, any> = {
+          current_status: newStatus,
+          updated_at: now,
+        };
+        if (options?.courierReference !== undefined) updatePayload.courier_reference = options.courierReference;
+        if (options?.internalNotes !== undefined) updatePayload.internal_fulfillment_notes = options.internalNotes;
+        if (newStatus === "SHIPPED") updatePayload.shipped_at = now;
+        if (newStatus === "DELIVERED") updatePayload.delivered_at = now;
+
+        await client
+          .from("fan_cards")
+          .update(updatePayload)
+          .eq("id", cardId);
+
+        await client
+          .from("fan_card_status_history")
+          .insert({
+            fan_card_id: cardId,
+            previous_status: previousStatus,
+            new_status: newStatus,
+            status_notes: note || null,
+            changed_by: options?.adminId && !options.adminId.startsWith("admin-") && !options.adminId.startsWith("mock-") ? options.adminId : null,
+            created_at: now,
+          });
+      } catch (err) {
+        console.error("[OperationsService updateFanCardStatus DB Failure]", err);
+      }
+    }
+
 
     // 4. Create immutable administrative audit log
     await recordAdminAuditLog({

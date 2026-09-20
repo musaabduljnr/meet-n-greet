@@ -434,8 +434,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {cities.map((city) => {
                   const isNearCapacity =
+                    city.max_capacity > 0 &&
                     city.current_registrations_count >= city.max_capacity * 0.8;
                   const isFull =
+                    city.max_capacity > 0 &&
                     city.current_registrations_count >= city.max_capacity;
 
                   // Format readable date
@@ -474,9 +476,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
                           </Badge>
 
                           <span className="text-[11px] font-mono text-[#6B6B7E]">
-                            Capacity: {city.max_capacity} Guests
+                            {city.max_capacity > 0
+                              ? `Capacity: ${city.max_capacity} Guests`
+                              : "VIP Experience"}
                           </span>
                         </div>
+
 
                         <CardTitle className="text-2xl">
                           {city.name}, {city.state}

@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdminPermission } from "@/lib/auth/admin-auth";
-import { recordAdminAuditLog, getAdminAuditLogs } from "@/lib/security/audit";
+import { recordAdminAuditLog, getAdminAuditLogs, getAdminAuditLogsAsync } from "@/lib/security/audit";
 import type { AuditAction, StoredAuditLog } from "@/lib/security/audit";
+
 import { operationsService } from "@/lib/services/operations-service";
 import type {
   EnrichedRegistration,
@@ -763,7 +764,7 @@ export async function getAuditLogsAction(filter?: {
 }): Promise<ActionResult<StoredAuditLog[]>> {
   try {
     await requireAdminPermission("audit_logs:view");
-    const logs = getAdminAuditLogs(filter);
+    const logs = await getAdminAuditLogsAsync(filter);
     return { success: true, data: logs };
   } catch (err: unknown) {
     return {
@@ -772,3 +773,5 @@ export async function getAuditLogsAction(filter?: {
     };
   }
 }
+
+

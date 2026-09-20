@@ -117,11 +117,14 @@ export function sanitizePublicCity(city: City): City {
     is_active: city.is_active,
     created_at: city.created_at,
     updated_at: city.updated_at,
-    notes: city.notes || null,
-    max_capacity: Number(city.max_capacity) || 50,
-    current_registrations_count: Number(city.current_registrations_count) || 0,
+    // Sensitive operational fields stripped for public consumers
+    notes: null,
+    max_capacity: 0,
+    current_registrations_count: 0,
   };
 }
+
+
 
 /**
  * Fetches all active public tour cities from Supabase.

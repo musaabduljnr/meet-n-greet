@@ -115,8 +115,86 @@ export function getAdminAuditLogs(filter?: {
 }
 
 /**
+ * Retrieves audit logs with optional filtering from Supabase or fallback store
+ */
+export async function getAdminAuditLogsAsync(filter?: {
+  action?: AuditAction;
+  adminEmail?: string;
+  entityTable?: string;
+  limit?: number;
+}): Promise<StoredAuditLog[]> {
+  const client = supabaseAdmin || supabase;
+  if (isSupabaseConfigured && client) {
+    try {
+      let query = client
+        .from("audit_logs")
+        .select(`
+          id,
+          admin_id,
+          action,
+          entity_table,
+          entity_id,
+          old_state,
+          new_state,
+          ip_address,
+          user_agent,
+          created_at,
+          admins:admin_id (email, role)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (filter?.action) {
+        query = query.eq("action", filter.action);
+      }
+
+      if (filter?.entityTable) {
+        query = query.eq("entity_table", filter.entityTable);
+      }
+
+      if (filter?.limit) {
+        query = query.limit(filter.limit);
+      }
+
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) {
+        let list: StoredAuditLog[] = data.map((item: any) => {
+          const adminObj = Array.isArray(item.admins) ? item.admins[0] : item.admins;
+          return {
+            id: item.id,
+            adminId: item.admin_id || "system",
+            adminEmail: adminObj?.email || "system@kountrywayne.vip",
+            adminRole: adminObj?.role || "ADMIN",
+            action: item.action as AuditAction,
+            entityTable: item.entity_table,
+            entityId: item.entity_id,
+            oldState: item.old_state,
+            newState: item.new_state,
+            ipAddress: item.ip_address,
+            userAgent: item.user_agent,
+            createdAt: item.created_at,
+          };
+        });
+
+        if (filter?.adminEmail) {
+          const email = filter.adminEmail.toLowerCase().trim();
+          list = list.filter((item) => item.adminEmail.toLowerCase() === email);
+        }
+
+        return list;
+      }
+    } catch (err) {
+      console.error("[AuditLog Fetch Error]", err);
+    }
+  }
+
+  return getAdminAuditLogs(filter);
+}
+
+
+/**
  * Clears in-memory audit logs (used for unit tests)
  */
 export function clearAuditLogs(): void {
   inMemoryAuditLogs.length = 0;
 }
+
