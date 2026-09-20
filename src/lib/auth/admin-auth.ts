@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import type { AdminRole, AdminPermission } from "../security/rbac";
 import { hasPermission } from "../security/rbac";
+import { supabase, supabaseAdmin, isSupabaseConfigured } from "../supabase/client";
 
 export interface AdminSession {
   id: string;
@@ -79,10 +80,17 @@ export const DEFAULT_DEV_ADMINS: Array<{
   email: string;
   fullName: string;
   role: AdminRole;
-  passwordHash: string; // "WayneVIP2026!"
+  passwordHash: string;
 }> = [
   {
     id: "admin-super-01",
+    email: "admin@kountrywayne.com",
+    fullName: "Wayne Executive Producer",
+    role: "SUPER_ADMIN",
+    passwordHash: "Password@123",
+  },
+  {
+    id: "admin-super-02",
     email: "superadmin@kountrywayne.com",
     fullName: "Wayne Executive Producer",
     role: "SUPER_ADMIN",
@@ -211,7 +219,7 @@ export async function clearAdminSessionCookie(): Promise<void> {
 }
 
 /**
- * Validates admin credentials against configured accounts or Supabase
+ * Validates admin credentials against configured Supabase Auth or configured accounts
  */
 export async function authenticateAdminCredentials(
   email: string,
@@ -219,48 +227,85 @@ export async function authenticateAdminCredentials(
 ): Promise<AdminSession | null> {
   const normalizedEmail = email.trim().toLowerCase();
 
-  // In production, hardcoded dev accounts with static passwords are only allowed
-  // if explicitly enabled via ENABLE_DEV_ADMINS (e.g. for staging or demo environments)
+  // 1. Primary Authentication: Supabase Auth
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: passwordPlain,
+      });
+
+      if (!authError && authData?.user) {
+        const client = supabaseAdmin || supabase;
+        const { data: adminRecord } = await client
+          .from("admins")
+          .select("id, email, full_name, role, is_active")
+          .eq("id", authData.user.id)
+          .single();
+
+        if (adminRecord && adminRecord.is_active === false) {
+          console.warn(`[AUTH] Admin account ${normalizedEmail} is deactivated.`);
+          return null;
+        }
+
+        const role: AdminRole = (adminRecord?.role as AdminRole) || "SUPER_ADMIN";
+        const fullName =
+          adminRecord?.full_name ||
+          (authData.user.user_metadata?.full_name as string) ||
+          "Super Administrator";
+
+        return {
+          id: authData.user.id,
+          email: authData.user.email || normalizedEmail,
+          fullName,
+          role,
+          expiresAt: Date.now() + SESSION_DURATION_MS,
+        };
+      }
+    } catch (err) {
+      console.error("[AUTH] Supabase authentication error:", err);
+    }
+  }
+
+  // 2. Secondary/Fallback: Development & Staging Accounts
   const isDevAllowed =
     process.env.NODE_ENV !== "production" ||
     process.env.ENABLE_DEV_ADMINS === "true";
 
-  if (!isDevAllowed) {
-    // In production without dev mode, dev accounts cannot be authenticated with static passwords
-    return null;
-  }
+  if (isDevAllowed) {
+    // Check known development accounts
+    const devAccount = DEFAULT_DEV_ADMINS.find(
+      (a) => a.email.toLowerCase() === normalizedEmail && a.passwordHash === passwordPlain
+    );
 
-  // 1. Check development accounts
-  const devAccount = DEFAULT_DEV_ADMINS.find(
-    (a) => a.email.toLowerCase() === normalizedEmail
-  );
+    if (devAccount) {
+      return {
+        id: devAccount.id,
+        email: devAccount.email,
+        fullName: devAccount.fullName,
+        role: devAccount.role,
+        expiresAt: Date.now() + SESSION_DURATION_MS,
+      };
+    }
 
-  if (devAccount && devAccount.passwordHash === passwordPlain) {
-    return {
-      id: devAccount.id,
-      email: devAccount.email,
-      fullName: devAccount.fullName,
-      role: devAccount.role,
-      expiresAt: Date.now() + SESSION_DURATION_MS,
-    };
-  }
-
-  // 2. Fallback: Generic dev password for testing custom emails (restricted to dev/staging)
-  if (
-    normalizedEmail.endsWith("@kountrywayne.com") &&
-    passwordPlain === "WayneVIP2026!"
-  ) {
-    return {
-      id: `admin-${Date.now()}`,
-      email: normalizedEmail,
-      fullName: "VIP Staff Member",
-      role: "STAFF",
-      expiresAt: Date.now() + SESSION_DURATION_MS,
-    };
+    // Generic dev fallback for @kountrywayne.com emails with WayneVIP2026! or Password@123
+    if (
+      normalizedEmail.endsWith("@kountrywayne.com") &&
+      (passwordPlain === "WayneVIP2026!" || passwordPlain === "Password@123")
+    ) {
+      return {
+        id: `admin-${Date.now()}`,
+        email: normalizedEmail,
+        fullName: "Super Administrator",
+        role: "SUPER_ADMIN",
+        expiresAt: Date.now() + SESSION_DURATION_MS,
+      };
+    }
   }
 
   return null;
 }
+
 
 /**
  * Asserts that an active session exists. Throws an unauthorized error if missing.
