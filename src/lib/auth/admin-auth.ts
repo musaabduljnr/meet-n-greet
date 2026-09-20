@@ -83,6 +83,13 @@ export const DEFAULT_DEV_ADMINS: Array<{
   passwordHash: string;
 }> = [
   {
+    id: "admin-wayne-01",
+    email: "admin@wayne.com",
+    fullName: "Wayne Executive Producer",
+    role: "SUPER_ADMIN",
+    passwordHash: "@Password123",
+  },
+  {
     id: "admin-super-01",
     email: "admin@kountrywayne.com",
     fullName: "Wayne Executive Producer",
@@ -111,6 +118,7 @@ export const DEFAULT_DEV_ADMINS: Array<{
     passwordHash: "WayneVIP2026!",
   },
 ];
+
 
 /**
  * Creates an HMAC-signed session token string using isomorphic Web Crypto
