@@ -1,4 +1,5 @@
-import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
+import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase/client";
+
 import { getActiveCities } from "@/lib/supabase/cities";
 import type {
   RegistrationInput,
@@ -126,17 +127,18 @@ export async function processRegistration(
   const trackingCode = generateFanCardTrackingCode();
 
   // 5. Database execution (Supabase or In-Memory test engine)
-  if (isSupabaseConfigured && supabase) {
+  const client = supabaseAdmin || supabase;
+  if (isSupabaseConfigured && client) {
     try {
       // Check for duplicate registration in this city
-      const { data: existingFan } = await supabase
+      const { data: existingFan } = await client
         .from("fans")
         .select("id")
         .eq("email", normalizedEmail)
         .maybeSingle();
 
       if (existingFan) {
-        const { data: existingReg } = await supabase
+        const { data: existingReg } = await client
           .from("registrations")
           .select("id")
           .eq("fan_id", existingFan.id)
@@ -156,7 +158,7 @@ export async function processRegistration(
       // Upsert fan
       let fanId = existingFan?.id;
       if (!fanId) {
-        const { data: newFan, error: fanError } = await supabase
+        const { data: newFan, error: fanError } = await client
           .from("fans")
           .insert({
             first_name: normalizedFirstName,
@@ -178,7 +180,7 @@ export async function processRegistration(
       }
 
       // Insert registration
-      const { data: reg, error: regError } = await supabase
+      const { data: reg, error: regError } = await client
         .from("registrations")
         .insert({
           fan_id: fanId,
@@ -194,7 +196,7 @@ export async function processRegistration(
       }
 
       // Insert Fan Card record
-      const { error: cardError } = await supabase.from("fan_cards").insert({
+      const { error: cardError } = await client.from("fan_cards").insert({
         registration_id: reg.id,
         fan_id: fanId,
         tracking_code: trackingCode,
@@ -204,6 +206,7 @@ export async function processRegistration(
       if (cardError) {
         console.error("Warning: Fan Card creation error:", cardError.message);
       }
+
     } catch (dbError: unknown) {
       const msg = dbError instanceof Error ? dbError.message : "Database error";
       console.error("[Registration DB Failure]", msg);

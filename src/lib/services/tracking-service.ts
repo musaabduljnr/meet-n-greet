@@ -1,4 +1,5 @@
-import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
+import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase/client";
+
 import { isValidTrackingCodeFormat } from "@/lib/security/tracking-code";
 import { checkTrackingRateLimit } from "@/lib/security/rate-limiter";
 import { FanCardStatus } from "@/types/database";
@@ -235,11 +236,13 @@ export async function lookupFanCardStatus(
   }
 
   // 3. Query Database (Supabase or Demo Store)
-  if (isSupabaseConfigured && supabase) {
+  const client = supabaseAdmin || supabase;
+  if (isSupabaseConfigured && client) {
     try {
       // Execute security definer RPC function or constrained server query
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from("fan_cards")
+
         .select(`
           tracking_code,
           current_status,

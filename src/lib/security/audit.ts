@@ -1,5 +1,6 @@
 import type { AdminRole } from "./rbac";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
+import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase/client";
+
 
 export type AuditAction =
   | "AUTH_LOGIN"
@@ -59,11 +60,12 @@ export async function recordAdminAuditLog(
   }
 
   // Persist to Supabase audit_logs table if configured
-  if (isSupabaseConfigured && supabase) {
+  const client = supabaseAdmin || supabase;
+  if (isSupabaseConfigured && client) {
     try {
-      await supabase.from("audit_logs").insert({
+      await client.from("audit_logs").insert({
         id: logId,
-        admin_id: entry.adminId.startsWith("mock-") ? null : entry.adminId,
+        admin_id: entry.adminId.startsWith("mock-") || entry.adminId.startsWith("admin-") ? null : entry.adminId,
         action: entry.action,
         entity_table: entry.entityTable,
         entity_id: entry.entityId,

@@ -1,5 +1,6 @@
-import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
+import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase/client";
 import { DEFAULT_ACTIVE_CITIES } from "@/lib/supabase/cities";
+
 import type {
   City,
   FanCardStatus,
@@ -694,9 +695,10 @@ export class OperationsService {
   // Tour Cities CRUD
   // ---------------------------------------------------------------------------
   public async getAllCities(): Promise<City[]> {
-    if (isSupabaseConfigured && supabase) {
+    const client = supabaseAdmin || supabase;
+    if (isSupabaseConfigured && client) {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await client
           .from("cities")
           .select("*")
           .order("tour_date", { ascending: true });
@@ -742,9 +744,10 @@ export class OperationsService {
       updated_at: new Date().toISOString(),
     };
 
-    if (isSupabaseConfigured && supabase) {
+    const client = supabaseAdmin || supabase;
+    if (isSupabaseConfigured && client) {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await client
           .from("cities")
           .insert(newCity)
           .select("*")
@@ -763,9 +766,10 @@ export class OperationsService {
     id: string,
     updates: Partial<Omit<City, "id" | "created_at">>
   ): Promise<City | null> {
-    if (isSupabaseConfigured && supabase) {
+    const client = supabaseAdmin || supabase;
+    if (isSupabaseConfigured && client) {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await client
           .from("cities")
           .update({ ...updates, updated_at: new Date().toISOString() })
           .eq("id", id)
@@ -776,6 +780,7 @@ export class OperationsService {
         console.error("[OperationsService updateCity DB Failure]", err);
       }
     }
+
 
     const index = inMemoryCities.findIndex((c) => c.id === id);
     if (index === -1) return null;
