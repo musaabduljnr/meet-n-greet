@@ -47,14 +47,9 @@ CREATE INDEX IF NOT EXISTS idx_fan_card_history_card_date
 CREATE INDEX IF NOT EXISTS idx_schedules_reg_id 
     ON public.meet_and_greet_schedules(registration_id);
 
-CREATE INDEX IF NOT EXISTS idx_schedules_fan_id 
-    ON public.meet_and_greet_schedules(fan_id);
+CREATE INDEX IF NOT EXISTS idx_schedules_assigned_date 
+    ON public.meet_and_greet_schedules(assigned_date);
 
-CREATE INDEX IF NOT EXISTS idx_schedules_city_date 
-    ON public.meet_and_greet_schedules(city_id, date);
-
-CREATE INDEX IF NOT EXISTS idx_schedules_status 
-    ON public.meet_and_greet_schedules(status);
 
 -- 4. Audit & Email Compliance Indexes
 CREATE INDEX IF NOT EXISTS idx_audit_logs_entity 
