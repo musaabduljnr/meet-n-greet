@@ -7,9 +7,9 @@ import { PublicHeader } from "@/components/layout/PublicHeader";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 
 export const metadata: Metadata = {
-  title: "VIP Registration | Meet Kountry Wayne",
+  title: "VIP Membership Registration | Kountry Wayne Fan Club",
   description:
-    "Request your opportunity to meet Kountry Wayne. Select your tour city and submit your contact details for curated VIP scheduling.",
+    "Register for official Kountry Wayne VIP Membership. Receive your embossed physical Fan Card, nationwide VIP Meet & Greet cohort credentials, and priority access.",
   robots: {
     index: true,
     follow: true,
@@ -25,7 +25,7 @@ function LoadingFallback() {
       <main className="flex-1 py-20 flex items-center justify-center">
         <Container size="md" className="text-center text-[#9E9EAF]">
           <div className="h-8 w-8 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-sm font-medium">Loading tour registration portal...</p>
+          <p className="text-sm font-medium">Loading VIP membership portal...</p>
         </Container>
       </main>
       <PublicFooter />

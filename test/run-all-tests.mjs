@@ -7,6 +7,7 @@ import { runAdminOperationsTestSuite } from "./admin-operations-suite.mjs";
 import { runScheduleTestSuite } from "./schedule-suite.mjs";
 import { runFanCardTestSuite } from "./fan-card-suite.mjs";
 import { runProductionReadinessTestSuite } from "./production-readiness-suite.mjs";
+import { runMembershipRegistrationTestSuite } from "./membership-registration-suite.mjs";
 
 async function main() {
   console.log("===============================================================================");
@@ -16,6 +17,9 @@ async function main() {
   const startTime = Date.now();
 
   const regResults = await runRegistrationTestSuite();
+  console.log("\n");
+
+  const membershipResults = await runMembershipRegistrationTestSuite();
   console.log("\n");
 
   const trackResults = await runTrackingTestSuite();
@@ -41,6 +45,7 @@ async function main() {
 
   const totalPassed =
     regResults.passed +
+    membershipResults.passed +
     trackResults.passed +
     emailResults.passed +
     authResults.passed +
@@ -50,6 +55,7 @@ async function main() {
     auditResults.passed;
   const totalFailed =
     regResults.failed +
+    membershipResults.failed +
     trackResults.failed +
     emailResults.failed +
     authResults.failed +
@@ -63,6 +69,7 @@ async function main() {
   console.log("  OVERALL TEST SUITE SUMMARY                                                   ");
   console.log("===============================================================================");
   console.log(`  Phase 3 (Registration Flow):       ${regResults.passed} passed, ${regResults.failed} failed`);
+  console.log(`  Phase 3B (Membership Suite):       ${membershipResults.passed} passed, ${membershipResults.failed} failed`);
   console.log(`  Phase 4 (Fan Card Tracking):       ${trackResults.passed} passed, ${trackResults.failed} failed`);
   console.log(`  Phase 5 (Email Infrastructure):    ${emailResults.passed} passed, ${emailResults.failed} failed`);
   console.log(`  Phase 6 (Admin Auth & RBAC):       ${authResults.passed} passed, ${authResults.failed} failed`);

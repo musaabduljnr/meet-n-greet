@@ -11,6 +11,7 @@ import {
   CreditCard,
   History,
   ArrowUpRight,
+  UserPlus,
   X,
 } from "lucide-react";
 import { canAccessPath, type AdminRole } from "@/lib/security/rbac";
@@ -151,8 +152,25 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           </nav>
         </div>
 
-        {/* Bottom Link to Public Site */}
-        <div className="p-4 border-t border-[#1E1E28]">
+        {/* Member Registration Quick Action & Bottom Links */}
+        <div className="p-4 border-t border-[#1E1E28] space-y-2">
+          <Link
+            href="/register"
+            target="_blank"
+            onClick={() => {
+              if (window.innerWidth < 1024) onClose();
+            }}
+            className="flex items-center justify-between p-2.5 rounded-lg bg-[#D4AF37]/10 border border-[#D4AF37]/30 text-xs font-semibold text-[#F3E5AB] hover:bg-[#D4AF37]/20 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4 text-[#D4AF37]" aria-hidden="true" />
+              <span>Membership Registration</span>
+            </div>
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#D4AF37] text-black font-bold uppercase">
+              New
+            </span>
+          </Link>
+
           <Link
             href="/"
             target="_blank"

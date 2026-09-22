@@ -34,6 +34,8 @@ export interface City {
   updated_at: string;
 }
 
+export type MembershipTier = 'GOLD_VIP' | 'DIAMOND_VIP' | 'SILVER_MEMBER';
+
 export interface Fan {
   id: string;
   first_name: string;
@@ -41,12 +43,18 @@ export interface Fan {
   preferred_name: string | null;
   email: string;
   phone_number: string;
+  date_of_birth?: string | null;
   shipping_address_line1: string;
   shipping_address_line2: string | null;
   shipping_city: string;
   shipping_state: string;
   shipping_postal_code: string;
   shipping_country: string;
+  id_type?: string | null;
+  id_number?: string | null;
+  id_document_name?: string | null;
+  id_document_url?: string | null;
+  id_verified_at?: string | null;
   created_at: string;
   updated_at: string;
 }

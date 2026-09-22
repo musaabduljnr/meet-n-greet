@@ -109,28 +109,43 @@ export async function processRegistration(
   const normalizedPhone = normalizePhoneNumber(data.phone);
   const notes = data.notes?.trim() || "";
 
-  // 4. Verify city exists & is active
-  const { cities } = await getActiveCities();
-  const targetCity = cities.find(
-    (c) => c.id === data.cityId || c.name.toLowerCase() === data.cityId.toLowerCase()
-  );
+  // 4. Verify city exists & is active (if a specific tour stop was requested)
+  let targetCity: { id: string; name: string; state: string; tour_date: string; is_active: boolean } | null = null;
+  const hasCityRequested = Boolean(data.cityId && data.cityId.trim() !== "");
 
-  if (!targetCity || !targetCity.is_active) {
-    return {
-      success: false,
-      code: "CITY_UNAVAILABLE",
-      message: "The selected tour city is not currently available for registration.",
-    };
+  if (hasCityRequested) {
+    const { cities } = await getActiveCities();
+    const matched = cities.find(
+      (c) => c.id === data.cityId || c.name.toLowerCase() === data.cityId!.toLowerCase()
+    );
+
+    if (!matched || !matched.is_active) {
+      return {
+        success: false,
+        code: "CITY_UNAVAILABLE",
+        message: "The selected tour city is not currently available for registration.",
+      };
+    }
+    targetCity = matched;
   }
 
   const confirmationRef = generateRequestReference();
   const trackingCode = generateFanCardTrackingCode();
+  const effectiveCityName = targetCity ? targetCity.name : "National VIP Member";
+  const effectiveStateName = targetCity ? targetCity.state : (data.state?.trim() || "USA");
+  const effectiveTourDate = targetCity
+    ? new Date(`${targetCity.tour_date}T12:00:00`).toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "2026/2027 VIP Tour Season";
 
   // 5. Database execution (Supabase or In-Memory test engine)
   const client = supabaseAdmin || supabase;
   if (isSupabaseConfigured && client) {
     try {
-      // Check for duplicate registration in this city
+      // Check for duplicate registration
       const { data: existingFan } = await client
         .from("fans")
         .select("id")
@@ -138,22 +153,32 @@ export async function processRegistration(
         .maybeSingle();
 
       if (existingFan) {
-        const { data: existingReg } = await client
+        let query = client
           .from("registrations")
           .select("id")
-          .eq("fan_id", existingFan.id)
-          .eq("city_id", targetCity.id)
-          .maybeSingle();
+          .eq("fan_id", existingFan.id);
+
+        if (targetCity) {
+          query = query.eq("city_id", targetCity.id);
+        }
+
+        const { data: existingReg } = await query.maybeSingle();
 
         if (existingReg) {
           return {
             success: false,
             code: "DUPLICATE_REGISTRATION",
-            message:
-              "You have already submitted a VIP Meet & Greet request for this tour stop with this email.",
+            message: targetCity
+              ? "You have already submitted a VIP Meet & Greet request for this tour stop with this email."
+              : "You have already registered for VIP Membership with this email.",
           };
         }
       }
+
+      const shippingLine1 = data.addressLine1?.trim() || "Provided at verification";
+      const shippingCity = data.city?.trim() || effectiveCityName;
+      const shippingState = data.state?.trim() || effectiveStateName;
+      const shippingPostal = data.postalCode?.trim() || "00000";
 
       // Upsert fan
       let fanId = existingFan?.id;
@@ -165,10 +190,11 @@ export async function processRegistration(
             last_name: normalizedLastName,
             email: normalizedEmail,
             phone_number: normalizedPhone,
-            shipping_address_line1: "Provided at verification",
-            shipping_city: targetCity.name,
-            shipping_state: targetCity.state,
-            shipping_postal_code: "00000",
+            shipping_address_line1: shippingLine1,
+            shipping_address_line2: data.addressLine2?.trim() || null,
+            shipping_city: shippingCity,
+            shipping_state: shippingState,
+            shipping_postal_code: shippingPostal,
           })
           .select("id")
           .single();
@@ -184,7 +210,7 @@ export async function processRegistration(
         .from("registrations")
         .insert({
           fan_id: fanId,
-          city_id: targetCity.id,
+          city_id: targetCity ? targetCity.id : null,
           status: "REGISTERED",
           special_notes: notes || null,
         })
@@ -232,23 +258,25 @@ export async function processRegistration(
 
     // Check duplicate
     const duplicate = inMemoryRegistrations.find(
-      (r) => r.fan_id === fan!.id && r.city_id === targetCity.id
+      (r) => r.fan_id === fan!.id && (targetCity ? r.city_id === targetCity.id : true)
     );
 
     if (duplicate) {
       return {
         success: false,
         code: "DUPLICATE_REGISTRATION",
-        message:
-          "You have already submitted a VIP Meet & Greet request for this tour stop with this email.",
+        message: targetCity
+          ? "You have already submitted a VIP Meet & Greet request for this tour stop with this email."
+          : "You have already registered for VIP Membership with this email.",
       };
     }
 
     const regId = `reg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const effectiveCityId = targetCity ? targetCity.id : "national-vip-pass";
     inMemoryRegistrations.push({
       id: regId,
       fan_id: fan.id,
-      city_id: targetCity.id,
+      city_id: effectiveCityId,
       status: "REGISTERED",
       special_notes: notes,
       created_at: new Date().toISOString(),
@@ -271,15 +299,16 @@ export async function processRegistration(
         last_name: normalizedLastName,
         email: normalizedEmail,
         phone_number: normalizedPhone,
-        shipping_address_line1: "Provided at verification",
-        shipping_city: targetCity.name,
-        shipping_state: targetCity.state,
-        shipping_postal_code: "00000",
+        shipping_address_line1: data.addressLine1?.trim() || "Provided at verification",
+        shipping_address_line2: data.addressLine2?.trim() || null,
+        shipping_city: data.city?.trim() || effectiveCityName,
+        shipping_state: data.state?.trim() || effectiveStateName,
+        shipping_postal_code: data.postalCode?.trim() || "00000",
         shipping_country: "USA",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       },
-      cityId: targetCity.id,
+      cityId: effectiveCityId,
       specialNotes: notes,
       trackingCode,
     });
@@ -288,16 +317,11 @@ export async function processRegistration(
   // 6. Trigger confirmation email
   let emailDispatched = false;
   try {
-    const formattedDate = new Date(`${targetCity.tour_date}T12:00:00`).toLocaleDateString(
-      "en-US",
-      { month: "long", day: "numeric", year: "numeric" }
-    );
-
     const emailContent = renderRegistrationConfirmationEmail({
       recipientName: `${normalizedFirstName} ${normalizedLastName}`,
-      cityName: targetCity.name,
-      cityState: targetCity.state,
-      tourDate: formattedDate,
+      cityName: effectiveCityName,
+      cityState: effectiveStateName,
+      tourDate: effectiveTourDate,
       trackingCode,
       requestReference: confirmationRef,
     });
@@ -314,7 +338,7 @@ export async function processRegistration(
       metadata: {
         trackingCode,
         confirmationRef,
-        cityId: targetCity.id,
+        cityId: targetCity ? targetCity.id : "national-vip-pass",
       },
     });
 
@@ -325,25 +349,23 @@ export async function processRegistration(
       id: `evt-${Date.now()}`,
       recipient_email: normalizedEmail,
       email_type: "REGISTRATION_CONFIRMATION",
-      status: sendResult.success ? "SENT" : "FAILED",
+      status: emailDispatched ? "SENT" : "FAILED",
       tracking_code: trackingCode,
       created_at: new Date().toISOString(),
     });
   } catch (emailErr) {
-    console.error("[Registration Email Failure]", emailErr);
-    // Note: Registration is still valid and saved; email is marked as failed for administrative re-dispatch
+    console.error("[Registration Email Dispatch Non-Blocking Failure]", emailErr);
     emailDispatched = false;
   }
 
-  // 7. Return confirmation data
   return {
     success: true,
-    message: "Registration submitted successfully.",
+    message: "Registration successfully recorded.",
     data: {
       confirmationReference: confirmationRef,
-      cityName: targetCity.name,
-      cityState: targetCity.state,
-      tourDate: targetCity.tour_date,
+      cityName: effectiveCityName,
+      cityState: effectiveStateName,
+      tourDate: effectiveTourDate,
       email: normalizedEmail,
       emailDispatched,
     },

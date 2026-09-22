@@ -1,5 +1,11 @@
 import { supabase, supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase/client";
-import { DEFAULT_ACTIVE_CITIES } from "@/lib/supabase/cities";
+import {
+  DEFAULT_ACTIVE_CITIES,
+  getFallbackCities,
+  addFallbackCity,
+  updateFallbackCity,
+  resetFallbackCities,
+} from "@/lib/supabase/cities";
 
 import type {
   City,
@@ -116,7 +122,7 @@ export interface DashboardKPIs {
 // -----------------------------------------------------------------------------
 // In-Memory Shared Store (Seed Data for Standalone Testing & Dev)
 // -----------------------------------------------------------------------------
-const inMemoryCities: City[] = [...DEFAULT_ACTIVE_CITIES];
+const inMemoryCities = getFallbackCities();
 
 const inMemoryFans: StoredFanEntity[] = [
   {
@@ -756,7 +762,7 @@ export class OperationsService {
         console.error("[OperationsService getAllCities DB Failure]", err);
       }
     }
-    return [...inMemoryCities].sort(
+    return [...getFallbackCities()].sort(
       (a, b) => new Date(a.tour_date).getTime() - new Date(b.tour_date).getTime()
     );
   }
@@ -777,8 +783,9 @@ export class OperationsService {
     notes?: string;
     is_active?: boolean;
   }): Promise<City> {
+    const cityId = crypto.randomUUID();
     const newCity: City = {
-      id: `city-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: cityId,
       name: input.name.trim(),
       state: input.state.trim().toUpperCase(),
       country: input.country || "USA",
@@ -801,13 +808,21 @@ export class OperationsService {
           .insert(newCity)
           .select("*")
           .single();
-        if (!error && data) return data as City;
+        if (error) {
+          console.error("[OperationsService createCity DB Failure]", error.message);
+          throw new Error(`Database error: ${error.message}`);
+        }
+        if (data) {
+          addFallbackCity(data as City);
+          return data as City;
+        }
       } catch (err) {
         console.error("[OperationsService createCity DB Failure]", err);
+        throw err;
       }
     }
 
-    inMemoryCities.push(newCity);
+    addFallbackCity(newCity);
     return newCity;
   }
 
@@ -824,21 +839,21 @@ export class OperationsService {
           .eq("id", id)
           .select("*")
           .single();
-        if (!error && data) return data as City;
+        if (error) {
+          console.error("[OperationsService updateCity DB Failure]", error.message);
+          throw new Error(`Database error: ${error.message}`);
+        }
+        if (data) {
+          updateFallbackCity(id, data as City);
+          return data as City;
+        }
       } catch (err) {
         console.error("[OperationsService updateCity DB Failure]", err);
+        throw err;
       }
     }
 
-    const index = inMemoryCities.findIndex((c) => c.id === id);
-    if (index === -1) return null;
-
-    inMemoryCities[index] = {
-      ...inMemoryCities[index],
-      ...updates,
-      updated_at: new Date().toISOString(),
-    };
-    return inMemoryCities[index];
+    return updateFallbackCity(id, updates);
   }
 
   public async toggleCityActive(id: string, isActive: boolean): Promise<City | null> {
@@ -980,7 +995,22 @@ export class OperationsService {
 
     let list = inMemoryRegistrations.map((reg) => {
       const fan = inMemoryFans.find((f) => f.id === reg.fan_id)!;
-      const city = inMemoryCities.find((c) => c.id === reg.city_id)!;
+      const matchedCity = inMemoryCities.find((c) => c.id === reg.city_id);
+      const city: City = matchedCity || {
+        id: reg.city_id || "national-vip-pass",
+        name: "National VIP Member",
+        state: "USA",
+        country: "USA",
+        venue_name: "VIP Guest Experience",
+        venue_address: "Nationwide Tour Appearance",
+        tour_date: "2026/2027 VIP Tour Season",
+        is_active: true,
+        max_capacity: 1000,
+        current_registrations_count: 0,
+        notes: "Nationwide VIP Pass (No specific tour stop required)",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
       const schedule = inMemorySchedules.find((s) => s.registration_id === reg.id) || null;
       const fanCard = inMemoryFanCards.find((c) => c.registration_id === reg.id) || null;
 
@@ -2047,8 +2077,8 @@ export class OperationsService {
       escapeCsv(r.fan.shipping_city),
       escapeCsv(r.fan.shipping_state),
       escapeCsv(r.fan.shipping_postal_code),
-      escapeCsv(r.city.name),
-      escapeCsv(r.city.tour_date),
+      escapeCsv(r.city?.name || "National VIP Member"),
+      escapeCsv(r.city?.tour_date || "2026/2027 VIP Tour Season"),
       escapeCsv(r.status),
       escapeCsv(r.fanCard?.tracking_code),
       escapeCsv(r.fanCard?.current_status),
@@ -2063,8 +2093,7 @@ export class OperationsService {
    * Reset store (useful for clean unit testing)
    */
   public resetStore(): void {
-    inMemoryCities.length = 0;
-    inMemoryCities.push(...DEFAULT_ACTIVE_CITIES);
+    resetFallbackCities();
 
     inMemoryFans.length = 0;
     inMemoryRegistrations.length = 0;

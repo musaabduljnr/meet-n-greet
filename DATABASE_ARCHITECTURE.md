@@ -102,7 +102,11 @@ CREATE TYPE email_type_enum AS ENUM (
     'SCHEDULE_NOTIFICATION',
     'SCHEDULE_UPDATE',
     'FAN_CARD_STATUS_UPDATE',
-    'ADMIN_ALERT'
+-- 4. VIP Membership tier
+CREATE TYPE membership_tier_enum AS ENUM (
+    'GOLD_VIP',
+    'DIAMOND_VIP',
+    'SILVER_MEMBER'
 );
 ```
 
@@ -147,7 +151,7 @@ CREATE TABLE public.cities (
 ```
 
 ### 3.3 `fans`
-Normalized representation of individual fan profiles. Prevents duplicate storage of person-level identities across multiple city tour registrations.
+Normalized representation of individual fan profiles. Prevents duplicate storage of person-level identities across multiple city tour registrations. Contains verified government photo ID and shipping coordinates.
 ```sql
 CREATE TABLE public.fans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -156,24 +160,31 @@ CREATE TABLE public.fans (
     preferred_name TEXT,
     email TEXT NOT NULL UNIQUE,
     phone_number TEXT NOT NULL,
+    date_of_birth DATE,
     shipping_address_line1 TEXT NOT NULL,
     shipping_address_line2 TEXT,
     shipping_city TEXT NOT NULL,
     shipping_state TEXT NOT NULL,
     shipping_postal_code TEXT NOT NULL,
     shipping_country TEXT NOT NULL DEFAULT 'USA',
+    id_type TEXT,
+    id_number TEXT,
+    id_document_name TEXT,
+    id_document_url TEXT,
+    id_verified_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT TIMEZONE('utc', NOW()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT TIMEZONE('utc', NOW())
 );
 ```
 
 ### 3.4 `registrations`
-Links a fan to a specific tour city. Contains fan attendance lifecycle.
+Links a fan to a specific tour city and VIP membership pass. Contains fan attendance lifecycle.
 ```sql
 CREATE TABLE public.registrations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     fan_id UUID NOT NULL REFERENCES public.fans(id) ON DELETE RESTRICT,
     city_id UUID NOT NULL REFERENCES public.cities(id) ON DELETE RESTRICT,
+    membership_tier membership_tier_enum NOT NULL DEFAULT 'GOLD_VIP',
     status registration_status_enum NOT NULL DEFAULT 'REGISTERED',
     special_notes TEXT,
     check_in_at TIMESTAMPTZ,

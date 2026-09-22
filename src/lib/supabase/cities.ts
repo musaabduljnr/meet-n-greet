@@ -101,6 +101,41 @@ export const DEFAULT_ACTIVE_CITIES: City[] = [
   },
 ];
 
+// Dynamic fallback store for offline/unconfigured runtime
+const fallbackCities: City[] = [...DEFAULT_ACTIVE_CITIES];
+
+export function getFallbackCities(): City[] {
+  return fallbackCities;
+}
+
+export function addFallbackCity(city: City): void {
+  const idx = fallbackCities.findIndex((c) => c.id === city.id);
+  if (idx >= 0) {
+    fallbackCities[idx] = city;
+  } else {
+    fallbackCities.push(city);
+  }
+}
+
+export function updateFallbackCity(
+  id: string,
+  updates: Partial<Omit<City, "id" | "created_at">>
+): City | null {
+  const idx = fallbackCities.findIndex((c) => c.id === id);
+  if (idx === -1) return null;
+  fallbackCities[idx] = {
+    ...fallbackCities[idx],
+    ...updates,
+    updated_at: new Date().toISOString(),
+  };
+  return fallbackCities[idx];
+}
+
+export function resetFallbackCities(): void {
+  fallbackCities.length = 0;
+  fallbackCities.push(...DEFAULT_ACTIVE_CITIES);
+}
+
 /**
  * Sanitizes city records for public consumption, preserving capacity and registration counts
  * so fans can select active tour stops.
@@ -124,8 +159,6 @@ export function sanitizePublicCity(city: City): City {
   };
 }
 
-
-
 /**
  * Fetches all active public tour cities from Supabase.
  * Falls back to default tour schedule if Supabase is offline or unconfigured.
@@ -135,7 +168,10 @@ export async function getActiveCities(): Promise<GetCitiesResult> {
 
   if (!isSupabaseConfigured || !client) {
     return {
-      cities: DEFAULT_ACTIVE_CITIES.map(sanitizePublicCity),
+      cities: fallbackCities
+        .filter((c) => c.is_active)
+        .sort((a, b) => new Date(a.tour_date).getTime() - new Date(b.tour_date).getTime())
+        .map(sanitizePublicCity),
       error: null,
       isLive: false,
     };
@@ -151,7 +187,10 @@ export async function getActiveCities(): Promise<GetCitiesResult> {
     if (error) {
       console.error("Error fetching cities from Supabase:", error.message);
       return {
-        cities: DEFAULT_ACTIVE_CITIES.map(sanitizePublicCity),
+        cities: fallbackCities
+          .filter((c) => c.is_active)
+          .sort((a, b) => new Date(a.tour_date).getTime() - new Date(b.tour_date).getTime())
+          .map(sanitizePublicCity),
         error: error.message,
         isLive: false,
       };
@@ -167,7 +206,10 @@ export async function getActiveCities(): Promise<GetCitiesResult> {
     const errorMsg = err instanceof Error ? err.message : "Failed to load cities";
     console.error("Exception fetching cities:", errorMsg);
     return {
-      cities: DEFAULT_ACTIVE_CITIES.map(sanitizePublicCity),
+      cities: fallbackCities
+        .filter((c) => c.is_active)
+        .sort((a, b) => new Date(a.tour_date).getTime() - new Date(b.tour_date).getTime())
+        .map(sanitizePublicCity),
       error: errorMsg,
       isLive: false,
     };

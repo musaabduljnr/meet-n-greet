@@ -35,9 +35,18 @@ export const PublicHeader: React.FC = () => {
 
             {/* Desktop Navigation */}
             <nav
-              className="hidden md:flex items-center gap-8 text-sm font-medium"
+              className="hidden md:flex items-center gap-7 text-sm font-medium"
               aria-label="Main Navigation"
             >
+              <Link
+                href="/register"
+                className="text-[#D4AF37] hover:text-[#F3E5AB] font-semibold transition-colors flex items-center gap-1.5"
+              >
+                <span>VIP Membership</span>
+                <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-[#D4AF37]/20 border border-[#D4AF37]/40 uppercase">
+                  Register
+                </span>
+              </Link>
               <Link
                 href="/#available-cities"
                 className="text-[#9E9EAF] hover:text-[#F8F8FC] transition-colors"
@@ -64,38 +73,42 @@ export const PublicHeader: React.FC = () => {
               </Link>
             </nav>
 
-            {/* Desktop CTAs */}
-            <div className="hidden md:flex items-center gap-3">
-              <Link href="/#tracking-section">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  leftIcon={<Search className="h-3.5 w-3.5" aria-hidden="true" />}
-                >
-                  Track Code
-                </Button>
-              </Link>
-              <Link href="/#available-cities">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  leftIcon={<MapPin className="h-3.5 w-3.5" aria-hidden="true" />}
-                >
-                  Choose Your City
-                </Button>
-              </Link>
-            </div>
+            {/* Desktop & Mobile Actions */}
+            <div className="flex items-center gap-2.5">
+              <div className="hidden sm:flex items-center gap-2.5">
+                <Link href="/#tracking-section">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<Search className="h-3.5 w-3.5" aria-hidden="true" />}
+                  >
+                    Track Code
+                  </Button>
+                </Link>
+                <Link href="/register">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={<MapPin className="h-3.5 w-3.5" aria-hidden="true" />}
+                  >
+                    Register
+                  </Button>
+                </Link>
+              </div>
 
-            {/* Mobile Hamburger Toggle */}
-            <button
-              type="button"
-              onClick={() => setMobileNavOpen(true)}
-              aria-label="Open mobile menu"
-              aria-expanded={mobileNavOpen}
-              className="md:hidden p-2 text-[#9E9EAF] hover:text-white rounded-md hover:bg-[#181820] transition-colors"
-            >
-              <Menu className="h-6 w-6" aria-hidden="true" />
-            </button>
+              {/* Collapsible Sidebar Toggle Button (Desktop & Mobile) */}
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen(true)}
+                aria-label="Toggle collapsible navigation sidebar"
+                aria-expanded={mobileNavOpen}
+                id="header-sidebar-toggle-btn"
+                className="p-2 text-[#9E9EAF] hover:text-white rounded-lg hover:bg-[#181820] border border-[#2A2A38] transition-colors flex items-center gap-1.5"
+              >
+                <Menu className="h-5 w-5 text-[#D4AF37]" aria-hidden="true" />
+                <span className="text-xs font-medium hidden md:inline text-[#F8F8FC]">Menu</span>
+              </button>
+            </div>
           </div>
         </Container>
       </header>

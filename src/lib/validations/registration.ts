@@ -25,7 +25,8 @@ export const registrationInputSchema = z.object({
   cityId: z
     .string()
     .trim()
-    .min(1, "Please select a tour city."),
+    .optional()
+    .default(""),
   firstName: z
     .string()
     .trim()
@@ -53,6 +54,61 @@ export const registrationInputSchema = z.object({
       const digits = val.replace(/\D/g, "");
       return digits.length >= 10 && digits.length <= 15;
     }, "Please enter a valid 10-digit phone number."),
+  membershipTier: z
+    .string()
+    .trim()
+    .optional()
+    .default("GOLD_VIP"),
+  dateOfBirth: z
+    .string()
+    .trim()
+    .optional()
+    .or(z.literal("")),
+  addressLine1: z
+    .string()
+    .trim()
+    .optional()
+    .default(""),
+  addressLine2: z
+    .string()
+    .trim()
+    .optional()
+    .default(""),
+  city: z
+    .string()
+    .trim()
+    .optional()
+    .default(""),
+  state: z
+    .string()
+    .trim()
+    .optional()
+    .default(""),
+  postalCode: z
+    .string()
+    .trim()
+    .optional()
+    .default(""),
+  idType: z
+    .string()
+    .trim()
+    .optional()
+    .default(""),
+  idNumber: z
+    .string()
+    .trim()
+    .optional()
+    .default(""),
+  idDocumentUrl: z
+    .string()
+    .trim()
+    .optional()
+    .default(""),
+  idDocumentName: z
+    .string()
+    .trim()
+    .optional()
+    .default(""),
   notes: z
     .string()
     .trim()
