@@ -8,6 +8,7 @@ export type AuditAction =
   | "STATUS_CHANGE"
   | "SCHEDULE_CHANGE"
   | "CITY_CHANGE"
+  | "CITY_DELETE"
   | "DATA_EXPORT"
   | "ADMIN_ACCOUNT_CHANGE"
   | "COMMUNICATION_DISPATCH";

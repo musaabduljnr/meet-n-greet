@@ -130,6 +130,7 @@ async function runAdminAuthTestSuite() {
   try {
     // SUPER_ADMIN has ALL permissions
     assert.equal(hasPermission("SUPER_ADMIN", "cities:manage"), true);
+    assert.equal(hasPermission("SUPER_ADMIN", "cities:delete"), true);
     assert.equal(hasPermission("SUPER_ADMIN", "registrations:manage"), true);
     assert.equal(hasPermission("SUPER_ADMIN", "schedules:manage"), true);
     assert.equal(hasPermission("SUPER_ADMIN", "fan_cards:manage_status"), true);

@@ -61,6 +61,12 @@ export async function runAdminOperationsTestSuite() {
     // Toggle inactive
     const toggled = await operationsService.toggleCityActive(newCity.id, false);
     assert.equal(toggled?.is_active, false);
+
+    // Delete city (Super Admin capability)
+    const deleted = await operationsService.deleteCity(newCity.id);
+    assert.equal(deleted, true, "City should be successfully deleted");
+    const afterDelete = await operationsService.getCityById(newCity.id);
+    assert.equal(afterDelete, null, "Deleted city should no longer be found");
   });
 
   // 2. Fan Registrations Triage & CSV Export

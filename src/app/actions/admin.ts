@@ -190,9 +190,6 @@ export async function toggleCityActiveAction(
     revalidatePath("/register");
     revalidatePath("/");
 
-    revalidatePath("/admin");
-    revalidatePath("/register");
-
     return {
       success: true,
       message: `City is now ${isActive ? "open" : "closed"} for VIP registration.`,
@@ -202,6 +199,49 @@ export async function toggleCityActiveAction(
     return {
       success: false,
       error: err instanceof Error ? err.message : "Failed to toggle city status",
+    };
+  }
+}
+
+export async function deleteCityAction(id: string): Promise<ActionResult<{ id: string }>> {
+  try {
+    const session = await requireAdminPermission("cities:delete");
+    const oldCity = await operationsService.getCityById(id);
+
+    if (!oldCity) {
+      return { success: false, error: "Tour city not found." };
+    }
+
+    const deleted = await operationsService.deleteCity(id);
+    if (!deleted) {
+      return { success: false, error: "Failed to delete tour city." };
+    }
+
+    await recordAdminAuditLog({
+      adminId: session.id,
+      adminEmail: session.email,
+      adminRole: session.role,
+      action: "CITY_DELETE",
+      entityTable: "cities",
+      entityId: id,
+      oldState: oldCity as unknown as Record<string, unknown>,
+      details: `Permanently deleted tour stop '${oldCity.name}, ${oldCity.state}' (${oldCity.tour_date})`,
+    });
+
+    revalidatePath("/admin/cities");
+    revalidatePath("/admin");
+    revalidatePath("/register");
+    revalidatePath("/");
+
+    return {
+      success: true,
+      message: `Tour stop '${oldCity.name}, ${oldCity.state}' has been permanently deleted.`,
+      data: { id },
+    };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to delete tour city",
     };
   }
 }

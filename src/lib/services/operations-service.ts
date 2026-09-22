@@ -4,6 +4,7 @@ import {
   getFallbackCities,
   addFallbackCity,
   updateFallbackCity,
+  removeFallbackCity,
   resetFallbackCities,
 } from "@/lib/supabase/cities";
 
@@ -39,7 +40,7 @@ export interface StoredFanEntity {
 export interface StoredRegistrationEntity {
   id: string;
   fan_id: string;
-  city_id: string;
+  city_id?: string | null;
   status: RegistrationStatus;
   special_notes?: string | null;
   check_in_at?: string | null;
@@ -858,6 +859,48 @@ export class OperationsService {
 
   public async toggleCityActive(id: string, isActive: boolean): Promise<City | null> {
     return this.updateCity(id, { is_active: isActive });
+  }
+
+  public async deleteCity(id: string): Promise<boolean> {
+    const client = supabaseAdmin || supabase;
+    if (isSupabaseConfigured && client) {
+      try {
+        // Safely unlink any existing registrations from this city first
+        // (converting them into Nationwide VIP All-Access passes)
+        const { error: unlinkError } = await client
+          .from("registrations")
+          .update({ city_id: null })
+          .eq("city_id", id);
+
+        if (unlinkError) {
+          console.warn("[OperationsService deleteCity unlinking registrations]", unlinkError.message);
+        }
+
+        const { error } = await client
+          .from("cities")
+          .delete()
+          .eq("id", id);
+
+        if (error) {
+          console.error("[OperationsService deleteCity DB Failure]", error.message);
+          throw new Error(`Database error: ${error.message}`);
+        }
+
+        removeFallbackCity(id);
+        return true;
+      } catch (err) {
+        console.error("[OperationsService deleteCity DB Failure]", err);
+        throw err;
+      }
+    }
+
+    // In-memory fallback: unlink registrations and remove city
+    for (const reg of inMemoryRegistrations) {
+      if (reg.city_id === id) {
+        reg.city_id = null;
+      }
+    }
+    return removeFallbackCity(id);
   }
 
   // ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@ export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "STAFF";
 export type AdminPermission =
   | "cities:view"
   | "cities:manage"
+  | "cities:delete"
   | "registrations:view"
   | "registrations:manage"
   | "schedules:view"
@@ -18,6 +19,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, AdminPermission[]> = {
   SUPER_ADMIN: [
     "cities:view",
     "cities:manage",
+    "cities:delete",
     "registrations:view",
     "registrations:manage",
     "schedules:view",

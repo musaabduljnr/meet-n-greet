@@ -312,6 +312,13 @@ export function updateFallbackCity(
   return fallbackCities[idx];
 }
 
+export function removeFallbackCity(id: string): boolean {
+  const idx = fallbackCities.findIndex((c) => c.id === id);
+  if (idx === -1) return false;
+  fallbackCities.splice(idx, 1);
+  return true;
+}
+
 export function resetFallbackCities(): void {
   fallbackCities.length = 0;
   fallbackCities.push(...DEFAULT_ACTIVE_CITIES);
