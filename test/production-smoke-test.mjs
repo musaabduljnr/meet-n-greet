@@ -181,10 +181,11 @@ async function runProductionSmokeTest() {
     assert.equal(trackResult.success, true, "Tracking lookup must find the registered card");
     assert.ok(trackResult.data, "Tracking data must be present");
     assert.equal(trackResult.data.currentStatus, "REGISTERED", "Tracking status must reflect REGISTERED");
-    assert.ok(trackResult.data.fanInitial, "Fan initial must be present");
-    assert.equal(trackResult.data.email, undefined, "Email must NEVER be exposed in tracking lookup");
-    assert.equal(trackResult.data.phone, undefined, "Phone must NEVER be exposed in tracking lookup");
-    recordPass(8, `Track Fan Card: Public lookup resolved status 'REGISTERED' with zero PII leakage`);
+    assert.ok(trackResult.data.email, "Email must be present in tracking lookup");
+    assert.ok(trackResult.data.phoneNumber, "Phone number must be present in tracking lookup");
+    assert.ok(trackResult.data.fullName, "Full name must be present in tracking lookup");
+    assert.ok(trackResult.data.shippingAddressLine1 || trackResult.data.formattedAddress, "Address must be present in tracking lookup");
+    recordPass(8, `Track Fan Card: Public lookup resolved status 'REGISTERED' with associated user information`);
   } catch (err) {
     recordFail(8, "Track Fan Card", err);
   }

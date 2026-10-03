@@ -16,6 +16,18 @@ export interface PublicTimelineStep {
 export interface SafeTrackingData {
   trackingCode: string;
   fanInitial: string;
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  shippingAddressLine1: string;
+  shippingAddressLine2?: string | null;
+  shippingCity: string;
+  shippingState: string;
+  shippingPostalCode: string;
+  shippingCountry: string;
+  formattedAddress: string;
   cityName: string;
   cityState: string;
   tourDate: string;
@@ -26,6 +38,8 @@ export interface SafeTrackingData {
   hasIssue: boolean;
   issueMessage?: string;
   courierReference?: string | null;
+  phone?: string;
+  address?: string;
 }
 
 export interface TrackingResult {
@@ -161,55 +175,131 @@ export function buildPublicTimeline(
   };
 }
 
+export interface DemoCardRecord {
+  initial: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  shippingAddressLine1: string;
+  shippingAddressLine2?: string | null;
+  shippingCity: string;
+  shippingState: string;
+  shippingPostalCode: string;
+  shippingCountry: string;
+  cityName: string;
+  cityState: string;
+  tourDate: string;
+  status: FanCardStatus;
+  updatedAt: string;
+  courierReference?: string | null;
+}
+
 // Fallback demo registry for testing and development
-const DEMO_CARDS: Record<
-  string,
-  {
-    initial: string;
-    cityName: string;
-    cityState: string;
-    tourDate: string;
-    status: FanCardStatus;
-    updatedAt: string;
-  }
-> = {
+const DEMO_CARDS: Record<string, DemoCardRecord> = {
   "KWFC-7X9K-42MA": {
     initial: "M.",
+    firstName: "Marcus",
+    lastName: "Sterling",
+    email: "marcus.s@example.com",
+    phoneNumber: "(404) 555-0192",
+    shippingAddressLine1: "428 Piedmont Ave NE",
+    shippingAddressLine2: null,
+    shippingCity: "Atlanta",
+    shippingState: "GA",
+    shippingPostalCode: "30308",
+    shippingCountry: "USA",
     cityName: "Atlanta",
     cityState: "GA",
     tourDate: "2026-11-14",
     status: "IN_TRANSIT",
     updatedAt: "2026-09-20T10:30:00Z",
+    courierReference: "FEDEX-EXP-ATL-9921",
   },
   "KWFC-3V8P-92L4": {
     initial: "K.",
+    firstName: "Keisha",
+    lastName: "Thompson",
+    email: "keisha.t@example.com",
+    phoneNumber: "(713) 555-4821",
+    shippingAddressLine1: "1902 Heights Blvd",
+    shippingAddressLine2: null,
+    shippingCity: "Houston",
+    shippingState: "TX",
+    shippingPostalCode: "77008",
+    shippingCountry: "USA",
     cityName: "Houston",
     cityState: "TX",
     tourDate: "2026-11-20",
     status: "PROCESSING",
     updatedAt: "2026-09-20T08:15:00Z",
+    courierReference: null,
   },
   "KWFC-9N2X-55Q8": {
     initial: "D.",
+    firstName: "David",
+    lastName: "Reynolds",
+    email: "dreynolds@example.com",
+    phoneNumber: "(312) 555-8392",
+    shippingAddressLine1: "840 Michigan Ave",
+    shippingAddressLine2: null,
+    shippingCity: "Chicago",
+    shippingState: "IL",
+    shippingPostalCode: "60611",
+    shippingCountry: "USA",
     cityName: "Chicago",
     cityState: "IL",
     tourDate: "2026-12-05",
     status: "DELIVERED",
     updatedAt: "2026-09-18T14:45:00Z",
+    courierReference: "USPS-DELIV-ORD-7712",
   },
   "KWFC-8S9U-2ARD": {
-    initial: "J.",
+    initial: "A.",
+    firstName: "Angela",
+    lastName: "Davis",
+    email: "angela.d@example.com",
+    phoneNumber: "(213) 555-9104",
+    shippingAddressLine1: "1120 Wilshire Blvd",
+    shippingAddressLine2: null,
+    shippingCity: "Los Angeles",
+    shippingState: "CA",
+    shippingPostalCode: "90017",
+    shippingCountry: "USA",
     cityName: "Los Angeles",
     cityState: "CA",
     tourDate: "2026-12-12",
     status: "DELIVERY_ISSUE",
     updatedAt: "2026-09-19T16:20:00Z",
+    courierReference: "UPS-EXC-LA-0012",
   },
 };
 
 /**
- * Secure server-side lookup for a Fan Card by tracking code.
- * Enforces rate limiting, input validation, and zero PII leakage.
+ * Formats multi-part physical address into a clean single string
+ */
+function formatAddress(
+  line1: string,
+  line2: string | null | undefined,
+  city: string,
+  state: string,
+  postal: string,
+  country: string
+): string {
+  const parts = [
+    line1,
+    line2,
+    [city, state].filter(Boolean).join(", "),
+    postal,
+    country,
+  ].filter(Boolean);
+  return parts.join(", ") || "Address on file";
+}
+
+/**
+ * Server-side lookup for a Fan Card by tracking code.
+ * Fetches associated VIP user identity, contact details, shipping destination,
+ * and delivery milestone progress.
  */
 export async function lookupFanCardStatus(
   rawCode: string,
@@ -235,21 +325,30 @@ export async function lookupFanCardStatus(
     };
   }
 
-  // 3. Query Database (Supabase or Demo Store)
+  // 3. Query Database (Supabase)
   const client = supabaseAdmin || supabase;
   if (isSupabaseConfigured && client) {
     try {
-      // Execute security definer RPC function or constrained server query
       const { data, error } = await client
         .from("fan_cards")
-
         .select(`
           tracking_code,
           current_status,
           courier_reference,
           updated_at,
           created_at,
-          fans:fan_id (first_name),
+          fans:fan_id (
+            first_name,
+            last_name,
+            email,
+            phone_number,
+            shipping_address_line1,
+            shipping_address_line2,
+            shipping_city,
+            shipping_state,
+            shipping_postal_code,
+            shipping_country
+          ),
           registrations:registration_id (
             cities:city_id (name, state, tour_date)
           ),
@@ -278,15 +377,33 @@ export async function lookupFanCardStatus(
         };
       }
 
-      // Safe column extraction - strictly zero PII
+      // Extract user information
       const fanObj = Array.isArray(data.fans) ? data.fans[0] : data.fans;
-      const firstName = fanObj?.first_name || "G";
-      const fanInitial = `${firstName.charAt(0).toUpperCase()}.`;
+      const firstName = fanObj?.first_name || "";
+      const lastName = fanObj?.last_name || "";
+      const fullName = [firstName, lastName].filter(Boolean).join(" ") || "VIP Guest";
+      const fanInitial = firstName ? `${firstName.charAt(0).toUpperCase()}.` : "G.";
+      const email = fanObj?.email || "";
+      const phoneNumber = fanObj?.phone_number || "";
+      const shippingAddressLine1 = fanObj?.shipping_address_line1 || "";
+      const shippingAddressLine2 = fanObj?.shipping_address_line2 || null;
+      const shippingCity = fanObj?.shipping_city || "";
+      const shippingState = fanObj?.shipping_state || "";
+      const shippingPostalCode = fanObj?.shipping_postal_code || "";
+      const shippingCountry = fanObj?.shipping_country || "USA";
+      const formattedAddress = formatAddress(
+        shippingAddressLine1,
+        shippingAddressLine2,
+        shippingCity,
+        shippingState,
+        shippingPostalCode,
+        shippingCountry
+      );
 
       const regObj = Array.isArray(data.registrations) ? data.registrations[0] : data.registrations;
       const cityObj = Array.isArray(regObj?.cities) ? regObj?.cities[0] : regObj?.cities;
-      const cityName = cityObj?.name || "Tour Stop";
-      const cityState = cityObj?.state || "";
+      const cityName = cityObj?.name || (shippingCity ? `${shippingCity} Stop` : "Tour Stop");
+      const cityState = cityObj?.state || shippingState || "";
       const tourDate = cityObj?.tour_date || "";
 
       const currentStatus = data.current_status as FanCardStatus;
@@ -309,6 +426,18 @@ export async function lookupFanCardStatus(
         data: {
           trackingCode: data.tracking_code,
           fanInitial,
+          fullName,
+          firstName,
+          lastName,
+          email,
+          phoneNumber,
+          shippingAddressLine1,
+          shippingAddressLine2,
+          shippingCity,
+          shippingState,
+          shippingPostalCode,
+          shippingCountry,
+          formattedAddress,
           cityName,
           cityState,
           tourDate,
@@ -319,6 +448,8 @@ export async function lookupFanCardStatus(
           hasIssue,
           issueMessage,
           courierReference: data.courier_reference || null,
+          phone: phoneNumber,
+          address: formattedAddress,
         },
       };
     } catch (err: unknown) {
@@ -335,10 +466,29 @@ export async function lookupFanCardStatus(
   const liveCard = await operationsService.getFanCardByTrackingCode(cleaned);
   if (liveCard) {
     const reg = await operationsService.getRegistrationById(liveCard.registration_id);
-    const firstName = reg?.fan?.first_name || "G";
-    const fanInitial = `${firstName.charAt(0).toUpperCase()}.`;
-    const cityName = reg?.city?.name || "Tour Stop";
-    const cityState = reg?.city?.state || "";
+    const firstName = reg?.fan?.first_name || "";
+    const lastName = reg?.fan?.last_name || "";
+    const fullName = [firstName, lastName].filter(Boolean).join(" ") || "VIP Guest";
+    const fanInitial = firstName ? `${firstName.charAt(0).toUpperCase()}.` : "G.";
+    const email = reg?.fan?.email || "";
+    const phoneNumber = reg?.fan?.phone_number || "";
+    const shippingAddressLine1 = reg?.fan?.shipping_address_line1 || "";
+    const shippingAddressLine2 = reg?.fan?.shipping_address_line2 || null;
+    const shippingCity = reg?.fan?.shipping_city || "";
+    const shippingState = reg?.fan?.shipping_state || "";
+    const shippingPostalCode = reg?.fan?.shipping_postal_code || "";
+    const shippingCountry = reg?.fan?.shipping_country || "USA";
+    const formattedAddress = formatAddress(
+      shippingAddressLine1,
+      shippingAddressLine2,
+      shippingCity,
+      shippingState,
+      shippingPostalCode,
+      shippingCountry
+    );
+
+    const cityName = reg?.city?.name || (shippingCity ? `${shippingCity} Stop` : "Tour Stop");
+    const cityState = reg?.city?.state || shippingState || "";
     const tourDate = reg?.city?.tour_date || "";
 
     const { timeline, hasIssue, issueMessage } = buildPublicTimeline(
@@ -356,6 +506,18 @@ export async function lookupFanCardStatus(
       data: {
         trackingCode: cleaned,
         fanInitial,
+        fullName,
+        firstName,
+        lastName,
+        email,
+        phoneNumber,
+        shippingAddressLine1,
+        shippingAddressLine2,
+        shippingCity,
+        shippingState,
+        shippingPostalCode,
+        shippingCountry,
+        formattedAddress,
         cityName,
         cityState,
         tourDate,
@@ -366,6 +528,8 @@ export async function lookupFanCardStatus(
         hasIssue,
         issueMessage,
         courierReference: liveCard.courier_reference || null,
+        phone: phoneNumber,
+        address: formattedAddress,
       },
     };
   }
@@ -385,12 +549,34 @@ export async function lookupFanCardStatus(
     demoRecord.updatedAt
   );
 
+  const fullName = [demoRecord.firstName, demoRecord.lastName].filter(Boolean).join(" ") || `${demoRecord.initial} (VIP Guest)`;
+  const formattedAddress = formatAddress(
+    demoRecord.shippingAddressLine1,
+    demoRecord.shippingAddressLine2,
+    demoRecord.shippingCity,
+    demoRecord.shippingState,
+    demoRecord.shippingPostalCode,
+    demoRecord.shippingCountry
+  );
+
   return {
     success: true,
     message: "Fan Card located.",
     data: {
       trackingCode: cleaned,
       fanInitial: demoRecord.initial,
+      fullName,
+      firstName: demoRecord.firstName,
+      lastName: demoRecord.lastName,
+      email: demoRecord.email,
+      phoneNumber: demoRecord.phoneNumber,
+      shippingAddressLine1: demoRecord.shippingAddressLine1,
+      shippingAddressLine2: demoRecord.shippingAddressLine2 || null,
+      shippingCity: demoRecord.shippingCity,
+      shippingState: demoRecord.shippingState,
+      shippingPostalCode: demoRecord.shippingPostalCode,
+      shippingCountry: demoRecord.shippingCountry,
+      formattedAddress,
       cityName: demoRecord.cityName,
       cityState: demoRecord.cityState,
       tourDate: demoRecord.tourDate,
@@ -400,6 +586,9 @@ export async function lookupFanCardStatus(
       timeline,
       hasIssue,
       issueMessage,
+      courierReference: demoRecord.courierReference || null,
+      phone: demoRecord.phoneNumber,
+      address: formattedAddress,
     },
   };
 }
@@ -409,7 +598,7 @@ export async function lookupFanCardStatus(
  */
 export function registerDemoCard(
   code: string,
-  data: {
+  data: Partial<DemoCardRecord> & {
     initial: string;
     cityName: string;
     cityState: string;
@@ -418,5 +607,25 @@ export function registerDemoCard(
     updatedAt: string;
   }
 ) {
-  DEMO_CARDS[code] = data;
+  const firstName = data.firstName || "VIP";
+  const lastName = data.lastName || "Guest";
+  DEMO_CARDS[code] = {
+    initial: data.initial,
+    firstName,
+    lastName,
+    email: data.email || "guest@meetkountrywayne.vip",
+    phoneNumber: data.phoneNumber || "(555) 000-0000",
+    shippingAddressLine1: data.shippingAddressLine1 || "Fulfillment Center Dispatch",
+    shippingAddressLine2: data.shippingAddressLine2 || null,
+    shippingCity: data.shippingCity || data.cityName,
+    shippingState: data.shippingState || data.cityState,
+    shippingPostalCode: data.shippingPostalCode || "00000",
+    shippingCountry: data.shippingCountry || "USA",
+    cityName: data.cityName,
+    cityState: data.cityState,
+    tourDate: data.tourDate,
+    status: data.status,
+    updatedAt: data.updatedAt,
+    courierReference: data.courierReference || null,
+  };
 }

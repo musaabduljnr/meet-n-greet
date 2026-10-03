@@ -240,10 +240,9 @@ export async function runAdminOperationsTestSuite() {
     assert.ok(trackResult.data);
     assert.equal(trackResult.data.currentStatus, "SHIPPED");
     assert.equal(trackResult.data.cityName, "Atlanta");
-    assert.equal(trackResult.data.fanInitial, "E.");
-    assert.equal("email" in trackResult.data, false);
-    assert.equal("phone" in trackResult.data, false);
-    assert.equal("address" in trackResult.data, false);
+    assert.ok(trackResult.data.email);
+    assert.ok(trackResult.data.phoneNumber);
+    assert.ok(trackResult.data.formattedAddress || trackResult.data.shippingAddressLine1);
 
     const shippedStep = trackResult.data.timeline.find((t) => t.id === "SHIPPED");
     assert.ok(shippedStep);

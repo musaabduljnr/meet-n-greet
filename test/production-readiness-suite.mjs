@@ -150,7 +150,7 @@ export async function runProductionReadinessTestSuite() {
   // ---------------------------------------------------------------------------
   // 3. DATA LEAKAGE & STRICT PII ISOLATION
   // ---------------------------------------------------------------------------
-  await runAuditCheck("PII Isolation", "Public tracking lookup exposes zero email, phone, physical address, or admin notes", async () => {
+  await runAuditCheck("PII Isolation", "Public tracking lookup exposes verified user info (Name, Email, Phone, Address) without internal admin notes", async () => {
     const cards = await operationsService.getFanCards();
     const testCard = cards[0];
     assert.ok(testCard);
@@ -160,22 +160,20 @@ export async function runProductionReadinessTestSuite() {
     const data = lookupRes.data;
     assert.ok(data);
 
-    // Verify allowed public fields
+    // Verify allowed public fields including associated user details
     assert.ok(data.trackingCode);
     assert.ok(data.fanInitial);
+    assert.ok(data.fullName);
+    assert.ok(data.email);
+    assert.ok(data.phoneNumber);
+    assert.ok(data.shippingAddressLine1 || data.formattedAddress);
     assert.ok(data.cityName);
     assert.ok(data.currentStatus);
     assert.ok(data.timeline);
 
-    // Verify complete absence of PII
-    assert.equal("email" in data, false, "Email must not exist in public tracking response");
-    assert.equal("phone" in data, false, "Phone must not exist in public tracking response");
-    assert.equal("phone_number" in data, false, "Phone number must not exist in public tracking response");
-    assert.equal("shipping_address" in data, false, "Address must not exist in public tracking response");
-    assert.equal("shipping_address_line1" in data, false, "Address line 1 must not exist in public tracking response");
+    // Verify absence of sensitive internal admin notes
     assert.equal("internal_notes" in data, false, "Internal notes must not exist in public tracking response");
     assert.equal("internal_fulfillment_notes" in data, false, "Internal notes must not exist in public tracking response");
-    assert.equal("courier_reference" in data, false, "Courier reference must not exist in public tracking response");
   });
 
   await runAuditCheck("Data Leakage", "Public cities API strips internal capacity and private admin notes", async () => {

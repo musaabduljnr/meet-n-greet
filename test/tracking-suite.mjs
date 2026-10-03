@@ -132,29 +132,30 @@ async function runTrackingTestSuite() {
     recordFail("Security: Generic Error Response on Non-Existent Codes", err);
   }
 
-  // TEST 5: Zero PII Leakage
+  // TEST 5: Associated User Information (Name, Email, Phone, Address)
   try {
     const res = await lookupFanCardStatus("KWFC-7X9K-42MA", "test-ip-5");
     assert.equal(res.success, true);
     const data = res.data;
 
-    // Strict assertions: zero PII fields must exist on the returned object
-    assert.equal("email" in data, false, "Must not contain email");
-    assert.equal("phone" in data, false, "Must not contain phone");
-    assert.equal("phoneNumber" in data, false, "Must not contain phoneNumber");
-    assert.equal("address" in data, false, "Must not contain address");
-    assert.equal("street" in data, false, "Must not contain street");
+    // Verify associated user identity and contact details
+    assert.ok(data.fullName, "Must contain full name");
+    assert.equal(data.fullName, "Marcus Sterling");
+    assert.ok(data.email, "Must contain email");
+    assert.equal(data.email, "marcus.s@example.com");
+    assert.ok(data.phoneNumber, "Must contain phone number");
+    assert.equal(data.phoneNumber, "(404) 555-0192");
+    assert.ok(data.shippingAddressLine1 || data.formattedAddress, "Must contain address");
+    assert.equal(data.shippingCity, "Atlanta");
+
+    // Internal admin notes must not leak
     assert.equal("notes" in data, false, "Must not contain notes");
     assert.equal("specialNotes" in data, false, "Must not contain specialNotes");
     assert.equal("adminNotes" in data, false, "Must not contain adminNotes");
-    assert.equal("fullName" in data, false, "Must not contain full name");
 
-    // Only initial is revealed
-    assert.equal(data.fanInitial, "M.");
-
-    recordPass("Security: Zero PII Leakage in Public Tracking Output");
+    recordPass("Functional: Associated User Information (Name, Email, Phone, Address) Returned");
   } catch (err) {
-    recordFail("Security: Zero PII Leakage in Public Tracking Output", err);
+    recordFail("Functional: Associated User Information (Name, Email, Phone, Address) Returned", err);
   }
 
   // TEST 6: Brute-Force Rate Limiting Protection
